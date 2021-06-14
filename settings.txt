@@ -1,0 +1,1 @@
+/home/ludovic/AgricarbonEO/Sentinel2/SENTINEL2A_20170622-104021-457_L2A_T31TCJ_C_V2-2_MTD_ALL.xml
