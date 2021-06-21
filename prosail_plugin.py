@@ -272,8 +272,8 @@ class ProsailPlugin:
         #Var_obsstd = np.random.rand(N_OBS,N_DATES) # OK
 
         # Threshold uncertainties
-        Var_obsstd = np.clip(Var_obsstd,0.1,100.0)
-        Var_sim = np.clip(Var_sim,0.2,100.0) #e dge effect
+        #Var_obsstd = np.clip(Var_obsstd,0.1,100.0)
+        #Var_sim = np.clip(Var_sim,0.2,100.0) #e dge effect
 
         Var_sim = np.ma.masked_array(Var_sim, mask=np.isnan(Var_sim))
         Var_obs = np.ma.masked_array(Var_obs, mask=np.isnan(Var_obs))
@@ -488,7 +488,10 @@ class ProsailPlugin:
         angles["obs_zen"]   = np.double(doc.getElementsByTagName('ZENITH_ANGLE')[4].firstChild.data)
         angles["obs_azi"]   = np.double(doc.getElementsByTagName('AZIMUTH_ANGLE')[4].firstChild.data)
         return angles
-
+        
+    def normal(self,x,mu,sig):
+        return(1.0/(np.sqrt(2.0*np.pi*sig*sig))*np.exp(-(x-mu)*(x-mu)/(2.0*sig*sig))) 
+        
     def update_dist_plot(self):
         k1 = self.dockwidget.combo_param.currentText()
         idx1 = self.dockwidget.combo_param.currentIndex()
@@ -496,12 +499,20 @@ class ProsailPlugin:
         idx2 = self.dockwidget.combo_param2.currentIndex()
         binsize = self.dockwidget.spinBoxBinSize.value()
         self.ax2.cla()
+        
+        post_param_mean = np.sum(self.inparam[idx1]*self.likelyhood.flatten(),axis=0)/np.sum(self.likelyhood.flatten(),axis=0)
+        post_param_std  = np.sqrt(np.sum(self.likelyhood.flatten()*(self.inparam[idx1]-post_param_mean)**2,axis=0)/np.sum(self.likelyhood.flatten(),axis=0))
         if not self.dockwidget.checkBox_2d.isChecked():
             self.ax2.hist(self.inparam[idx1],color='r',alpha=0.3,density=True,bins=np.linspace(self.param_range[k1][0],self.param_range[k1][1],binsize))
             self.ax2.hist(self.inparam[idx1],color='b',alpha=0.3,weights=self.likelyhood.flatten(),density=True,bins=np.linspace(self.param_range[k1][0],self.param_range[k1][1],binsize))
             self.ax2.set_title(k1)
             self.ax2.set_xlabel(k1)
             self.ax2.set_ylabel("P(%s)"%(k1))
+            x=np.linspace(self.ax2.get_xlim()[0],self.ax2.get_xlim()[1],100)
+            self.ax2.plot(x,self.normal(x,post_param_mean,post_param_std),color=[0.2,0.7,0.3])
+            self.ax2.plot([post_param_mean,post_param_mean],[0,self.normal(post_param_mean,post_param_mean,post_param_std)],color=[0.2,0.7,0.3])
+            self.ax2.plot([post_param_mean+post_param_std,post_param_mean+post_param_std],[0,self.normal(post_param_mean+post_param_std,post_param_mean,post_param_std)],color=[0.2,0.7,0.3])
+            self.ax2.plot([post_param_mean-post_param_std,post_param_mean-post_param_std],[0,self.normal(post_param_mean-post_param_std,post_param_mean,post_param_std)],color=[0.2,0.7,0.3])
         else:
             bin2d = [np.linspace(self.param_range[k1][0],self.param_range[k1][1],binsize),np.linspace(self.param_range[k2][0],self.param_range[k2][1],binsize)]
             self.ax2.hist2d(self.inparam[idx1],self.inparam[idx2], bins=bin2d, density=True, weights=self.likelyhood.flatten())
@@ -539,7 +550,7 @@ class ProsailPlugin:
         print("DEBUG: Start Likelyhood")
         init_loglikelyhood = np.zeros((self.n_LUT,1))
         Var_obs = profile_raster.reshape((1,len(profile_raster)))
-        Var_obsstd = 0.001*np.ones((1,len(profile_raster)))
+        Var_obsstd = 0.04*np.ones((1,len(profile_raster)))
         Var_sim = self.Var_sim 
         #Var_sim = np.random.rand(N_LUT,N_DATES) # OK
         #Var_obs = np.random.rand(N_OBS,N_DATES) # OK
@@ -549,7 +560,7 @@ class ProsailPlugin:
 
         centers = np.array([442.7,492.4,559.8,664.6,704.1,740.5,782.8,832.8,864.7,945.1,1373.5,1613.7,2202.4])
         centers = centers[used]
-        likelyhood_alpha = 0.01*self.likelyhood.T.flatten()/np.max(self.likelyhood)
+        likelyhood_alpha = 0.05*self.likelyhood.T.flatten()/np.max(self.likelyhood)
         print("HERE",likelyhood_alpha.shape,Var_sim.shape,self.likelyhood.shape)
         for i,b in enumerate(Var_sim):
             p, = self.ax1.plot(centers,b,color = 'r',alpha = likelyhood_alpha[i])
@@ -623,7 +634,7 @@ class ProsailPlugin:
         self.dockwidget.combo_param.addItems(self.param_list)
         self.dockwidget.combo_param.currentIndexChanged.connect(self.combo_change)
         self.param = self.dockwidget.combo_param.currentText()
-
+        self.n_LUT = 5000
         self.dockwidget.combo_param2.clear()
         self.dockwidget.combo_param2.addItems(self.param_list)
         self.dockwidget.combo_param2.currentIndexChanged.connect(self.combo_change)
